@@ -18,69 +18,66 @@ function getFunctionNodesString(parsedCode) {
     let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body, nodesString = '';
     for(let  i = 0; i < body.length; i++){
         if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement')
-            nodesString = 'op' + opIndex++ + '=>operation: ' + nodesString;
+            nodesString = `op${opIndex++}=>operation: ${nodesString}`;
         nodesString += getNodeString(body[i]);
     }
     return nodesString;
 }
 
-const getStringHandlersMap = {'IfStatement': getIfStatementString, 'BlockStatement': getBlockStatementString,
-    'ExpressionStatement': getExpressionStatementString ,'AssignmentExpression': getAssignmentExpressionString,
-    'VariableDeclaration': getVariableDeclarationString, 'ReturnStatement': getReturnStatementString};
+const getStringHandlersMap = {'IfStatement': getIfStatementNodeString, 'BlockStatement': getBlockStatementNodeString,
+    'ExpressionStatement': getExpressionStatementNodeString ,'AssignmentExpression': getAssignmentExpressionNodeString,
+    'VariableDeclaration': getVariableDeclarationNodeString, 'ReturnStatement': getReturnStatementNodeString};
 
 function getNodeString(node) {
     let func = getStringHandlersMap[node.type];
     return func ? func(node) : '';
 }
 
-function getIfStatementString(ifStatement) {
-    let indexOrEmpty = '', nodesString;
+function getIfStatementNodeString(ifStatement) {
+    let indexOrEmpty = '';
     if(condIndex !==1)
         indexOrEmpty = condIndex++;
     else
         condIndex++;
-    nodesString = 'cond' + indexOrEmpty +'=>condition: ' + astToCode(ifStatement.test) + '\n';
+    let nodesString = `cond${indexOrEmpty}=>condition: ${astToCode(ifStatement.test)}\n`;
     nodesString += getIfConsequentString(ifStatement.consequent);
     nodesString += getNodeString(ifStatement.alternate);
     return nodesString;
 }
 
 function getIfConsequentString(node) {
-    if(node.type === 'BlockStatement'){
-        node = node.body[0];
-    }
-    let indexOrEmpty = '', nodesString;
+    let indexOrEmpty = '';
     if(paraIndex !==1)
         indexOrEmpty = paraIndex++;
     else
         paraIndex++;
-    nodesString= 'para' + indexOrEmpty +'=>parallel: ' + astToCode(node).replace(/;/g, '') + '\n';
+    let nodesString = `para${indexOrEmpty}=>parallel: ${astToCode(node).replace(/ {2}|{|}|;|\n/g, '')}\n`;
     return nodesString;
 }
 
-function getBlockStatementString(node) {
-    let nodesString = 'op' + opIndex++ + '=>operation: ';
+function getBlockStatementNodeString(node) {
+    let nodesString = `op${opIndex++}=>operation: `;
     for (let i = 0 ; i < node.body.length; i++)
         nodesString += getNodeString(node.body[i]);
     return nodesString;
 }
 
-function getExpressionStatementString(node) {
+function getExpressionStatementNodeString(node) {
     return getNodeString(node.expression);
 }
 
-function getAssignmentExpressionString(node){
+function getAssignmentExpressionNodeString(node){
     return astToCode(node).replace(/;/g, '') + '\n';
 }
 
-function getVariableDeclarationString(node) {
+function getVariableDeclarationNodeString(node) {
     return astToCode(node).replace(/let |;/g, '') + '\n';
 }
 
-function getReturnStatementString(node){
+function getReturnStatementNodeString(node){
     let index = opIndex++;
     returnOpIndex = index;
-    return 'op' + index + '=>operation: ' + astToCode(node).replace(/;/g, '') + '\n';
+    return `op${index}=>operation: ${astToCode(node).replace(/;/g, '')}\n`;
 }
 
 function getFunctionDecl(parsedCode) {
@@ -91,27 +88,27 @@ function getFunctionDecl(parsedCode) {
 
 function getFunctionEdgesString(parsedCode) {
     initGlobalIndexes();
-    let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body, edgesString = '';
-    edgesString +=
-        'op1->cond\n' +
-        'cond(yes,right)->para\n' +
-        'para(path1,bottom)->op' + returnOpIndex + '\n';
-
+    let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body;
+    let edgesString = 'op1->cond\n';
+    opIndex++;
     for(let i =0; i < body.length; i++){
         if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement'){
-            edgesString += getIfStatementEdgeString(body[i]);
+            edgesString += getIfStatementEdgeString();
         }
     }
     return edgesString;
 }
 
-function getIfStatementEdgeString(node) {
-    let indexOrEmpty = '', edgesString = '';
+function getIfStatementEdgeString() {
+    let indexOrEmpty = '';
     if(condIndex !==1)
         indexOrEmpty = condIndex++;
     else
         condIndex++;
-    edgesString += 'cond'+ indexOrEmpty + '(no)->cond' + condIndex + '\n';
+    let edgesString = `cond${indexOrEmpty}(yes,right)->para${indexOrEmpty}\n`;
+    edgesString += `para${indexOrEmpty}(path1)->op${returnOpIndex}\n`;
+    edgesString += `cond${indexOrEmpty}(no)->op${opIndex}\n`;
+    edgesString += `op${opIndex}->op${returnOpIndex}\n`;
     return edgesString;
 }
 

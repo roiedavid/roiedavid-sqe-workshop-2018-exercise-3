@@ -1,4 +1,5 @@
 import $ from 'jquery';
+import * as flowchart from 'flowchart.js';
 import {parseCode, getFunctionNodesString, getFunctionEdgesString} from './code-analyzer';
 
 $(document).ready(function () {
@@ -6,8 +7,18 @@ $(document).ready(function () {
         let codeToParse = $('#codePlaceholder').val(), parsedCode = parseCode(codeToParse);
         $('#parsedCode').val(JSON.stringify(parsedCode, null, 2));
         let nodesString = getFunctionNodesString(parsedCode);
-        console.log('nodes are\n' + nodesString);
         let edgesString = getFunctionEdgesString(parsedCode);
-        console.log('edges are\n' + edgesString);
+        console.log(nodesString + '\n' + edgesString);
+        let diagram = flowchart.parse(nodesString + '\n' + edgesString);
+        clearGraph();
+        diagram.drawSVG('graph', {
+            'flowstate' : {
+                'approved' : {'fill':'Chartreuse', 'yes-text': 'T', 'no-text': 'F'}
+            }
+        });
     });
 });
+
+function clearGraph() {
+    document.getElementById('graph').innerHTML = '';
+}
