@@ -1,7 +1,7 @@
 import * as esprima from 'esprima';
 import * as escodegen from 'escodegen';
 
-let opIndex, condIndex, paraIndex, returnOpIndex;
+let opIndex, condIndex, paraIndex, connIndex;
 
 // parseCode : string -> ast
 const parseCode = (codeToParse) => {
@@ -15,10 +15,11 @@ const astToCode = (ast) => {
 
 function getFunctionNodesString(parsedCode) {
     initGlobalIndexes();
-    let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body, nodesString = '';
+    let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body;
+    let nodesString = '';
     for(let  i = 0; i < body.length; i++){
-        if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement')
-            nodesString = `op${opIndex++}=>operation: ${nodesString}`;
+        if (body[i].type === 'IfStatement')
+            nodesString = `conn1=>start: i'm white|connection\nop${opIndex++}=>operation: ${nodesString}`;
         nodesString += getNodeString(body[i]);
     }
     return nodesString;
@@ -34,24 +35,9 @@ function getNodeString(node) {
 }
 
 function getIfStatementNodeString(ifStatement) {
-    let indexOrEmpty = '';
-    if(condIndex !==1)
-        indexOrEmpty = condIndex++;
-    else
-        condIndex++;
-    let nodesString = `cond${indexOrEmpty}=>condition: ${astToCode(ifStatement.test)}\n`;
-    nodesString += getIfConsequentString(ifStatement.consequent);
-    nodesString += getNodeString(ifStatement.alternate);
-    return nodesString;
-}
-
-function getIfConsequentString(node) {
-    let indexOrEmpty = '';
-    if(paraIndex !==1)
-        indexOrEmpty = paraIndex++;
-    else
-        paraIndex++;
-    let nodesString = `para${indexOrEmpty}=>parallel: ${astToCode(node).replace(/ {2}|{|}|;|\n/g, '')}\n`;
+    let nodesString = `cond${condIndex++}=>condition: ${astToCode(ifStatement.test)}\n`;
+    nodesString += `para${paraIndex++}=>parallel: ${astToCode(ifStatement.consequent).replace(/ {2}|{|}|;|\n/g, '')}\n`;
+    nodesString += ifStatement.alternate ? getNodeString(ifStatement.alternate) : '';
     return nodesString;
 }
 
@@ -75,9 +61,7 @@ function getVariableDeclarationNodeString(node) {
 }
 
 function getReturnStatementNodeString(node){
-    let index = opIndex++;
-    returnOpIndex = index;
-    return `op${index}=>operation: ${astToCode(node).replace(/;/g, '')}\n`;
+    return `op${opIndex++}=>operation: ${astToCode(node).replace(/;/g, '')}\n`;
 }
 
 function getFunctionDecl(parsedCode) {
@@ -89,31 +73,28 @@ function getFunctionDecl(parsedCode) {
 function getFunctionEdgesString(parsedCode) {
     initGlobalIndexes();
     let parsedFunction= getFunctionDecl(parsedCode), body = parsedFunction.body.body;
-    let edgesString = 'op1->cond\n';
-    opIndex++;
+    let edgesString = `op${opIndex++}->cond${condIndex}\n`;
     for(let i =0; i < body.length; i++){
-        if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement'){
-            edgesString += getIfStatementEdgeString();
-        }
+        if (body[i].type === 'IfStatement')
+            edgesString += getIfStatementEdgeString(body[i]);
     }
     return edgesString;
 }
 
-function getIfStatementEdgeString() {
-    let indexOrEmpty = '';
-    if(condIndex !==1)
-        indexOrEmpty = condIndex++;
-    else
-        condIndex++;
-    let edgesString = `cond${indexOrEmpty}(yes,right)->para${indexOrEmpty}\n`;
-    edgesString += `para${indexOrEmpty}(path1)->op${returnOpIndex}\n`;
-    edgesString += `cond${indexOrEmpty}(no)->op${opIndex}\n`;
-    edgesString += `op${opIndex}->op${returnOpIndex}\n`;
+function getIfStatementEdgeString(ifStatement) {
+    let index = condIndex++;
+    let edgesString = `cond${index}(yes,right)->para${index}\n`;
+    edgesString += `para${index}(path1)->conn${connIndex}\n`;
+    edgesString += `cond${index}(no)->` +
+        (ifStatement.alternate && ifStatement.alternate.type === 'IfStatement' ? `cond${index+1}` : `op${opIndex}`) + '\n';
+    edgesString += `op${opIndex}->conn${connIndex}\n`;
+    edgesString += `conn${connIndex}->op${opIndex+1}\n`;
+    edgesString += (ifStatement.alternate && ifStatement.alternate.type === 'IfStatement') ? getIfStatementEdgeString(ifStatement.alternate) : '';
     return edgesString;
 }
 
 function initGlobalIndexes() {
-    opIndex = condIndex = paraIndex = 1;
+    opIndex = condIndex = paraIndex = connIndex = 1;
 }
 
 export {parseCode, getFunctionNodesString, getFunctionEdgesString};

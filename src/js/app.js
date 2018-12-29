@@ -13,6 +13,7 @@ $(document).ready(function () {
         clearGraph();
         diagram.drawSVG('graph', {
             'flowstate' : {
+                'connection' : {'font-color': 'white'},
                 'approved' : {'fill':'Chartreuse', 'yes-text': 'T', 'no-text': 'F'}
             }
         });
