@@ -1,7 +1,7 @@
 import * as esprima from 'esprima';
 import * as escodegen from 'escodegen';
 
-let opIndex, condIndex, paraIndex, connIndex, newOP;
+let opIndex, condIndex, paraIndex, connIndex, newOP, lines;
 
 // parseCode : string -> ast
 const parseCode = (codeToParse) => {
@@ -16,12 +16,15 @@ const astToCode = (ast) => {
 // Nodes Building
 function getFunctionNodesString(parsedCode) {
     initGlobalIndexes();
-    let body = parsedCode.body[0].body.body, nodesString = '';
+    let body = parsedCode.body[0].body.body, nodesString = '', firstCond = true;
     for(let  i = 0; i < body.length; i++){
-        if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement')
-            nodesString = `conn1=>start: i'm white|connection\nop${opIndex++}=>operation: ${nodesString}`;
+        if ((body[i].type === 'IfStatement' || body[i].type === 'WhileStatement') && firstCond){
+            nodesString = `op${opIndex++}=>operation: ${nodesString}`;
+            firstCond = false;
+        }
         nodesString += getNodeString(body[i]);
     }
+    lines = nodesString.split('\n');
     return nodesString;
 }
 
@@ -39,6 +42,7 @@ function getIfStatementNodeString(ifStatement) {
     newOP = true;
     let nodesString = `cond${condIndex++}=>condition: ${astToCode(ifStatement.test)}\n`;
     nodesString += `para${paraIndex++}=>parallel: ${getBlockContent(ifStatement.consequent)}`;
+    nodesString += `conn${connIndex++}=>start: i'm white|connection\n`;
     nodesString += ifStatement.alternate ? getNodeString(ifStatement.alternate) : '';
     return nodesString;
 }
@@ -78,7 +82,7 @@ function getAssignmentExpressionNodeString(assignmentExpression){
     if(newOP)
         content = `op${opIndex++}=>operation: ` + content;
     newOP = false;
-   return content;
+    return content;
 }
 
 function getVariableDeclarationNodeString(variableDeclaration) {
@@ -104,32 +108,58 @@ function getFunctionEdgesString(parsedCode) {
 
 function getIfStatementEdgeString(ifStatement, skip) {
     let index = condIndex++, edgesString = '';
-    if (!skip)
+    if (!skip && !prevIsCond(index))
         edgesString = `op${opIndex++}->cond${index}\n`;
     edgesString += `cond${index}(yes,right)->para${index}\n`;
     edgesString += `para${index}(path1)->conn${connIndex}\n`;
     edgesString += getIfAlternateEdgeString(ifStatement, index);
     if (ifStatement.alternate && ifStatement.alternate.type === 'IfStatement')
         edgesString += getIfStatementEdgeString(ifStatement.alternate, true);
+    connIndex++;
     return edgesString;
 }
 
 function getIfAlternateEdgeString(ifStatement, index) {
-   let edgesString = '';
+    let edgesString = '';
     if(ifStatement.alternate){ // there is else
         if(ifStatement.alternate.type === 'IfStatement') // it's else-if
             edgesString += `cond${index}(no)->cond${index + 1}\n`;
         else { // regular else (not else-if)
             edgesString += `cond${index}(no)->op${opIndex}\n`;
             edgesString += `op${opIndex}->conn${connIndex}\n`;
-            edgesString += `conn${connIndex}->op${opIndex+1}\n`;
+            if(nextIsCond(index))
+                edgesString += `conn${connIndex}->cond${index + 1}\n`;
+            else
+                edgesString += `conn${connIndex}->op${opIndex + 1}\n`;
         }
     }
     else { // there is no else
         edgesString += `cond${index}(no)->conn${connIndex}\n`;
-        edgesString += `conn${connIndex}->op${opIndex}\n`;
+        if(nextIsCond(index))
+            edgesString += `conn${connIndex}->cond${index + 1}\n`;
+        else
+            edgesString += `conn${connIndex}->op${opIndex}\n`;
     }
     return edgesString;
+}
+
+function prevIsCond(ifIndex) {
+    for(let i = 0; i < lines.length; i++)
+        if(lines[i].includes(`cond${ifIndex}`))
+            for(let j = i-1; j > 0; j--) {
+                if (lines[j].includes('cond'))
+                    return true;
+                else if (lines[j].includes('op'))
+                    return false;
+            }
+    return false;
+}
+
+function nextIsCond(ifIndex) {
+    for(let i = 0; i < lines.length; i++)
+        if(lines[i].includes(`cond${ifIndex}`) && i + 3 < lines.length && lines[i + 3].includes('cond'))
+            return true;
+    return false;
 }
 
 function getWhileStatementEdgeString() {
