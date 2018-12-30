@@ -4,17 +4,19 @@ import {parseCode, getFunctionNodesString, getFunctionEdgesString} from './code-
 
 $(document).ready(function () {
     $('#codeSubmissionButton').click(() => {
-        let codeToParse = $('#codePlaceholder').val(), parsedCode = parseCode(codeToParse);
+        let codeToParse = $('#codePlaceholder').val(), argumentsToParse = $('#argumentsPlaceholder').val();
+        let parsedCode = parseCode(codeToParse), parsedArgs = parseCode(argumentsToParse);
         $('#parsedCode').val(JSON.stringify(parsedCode, null, 2));
         let nodesString = getFunctionNodesString(parsedCode);
         let edgesString = getFunctionEdgesString(parsedCode);
         console.log(nodesString + '\n' + edgesString);
-        let diagram = flowchart.parse(nodesString + '\n' + edgesString);
+        let graph = flowchart.parse(nodesString + '\n' + edgesString);
         clearGraph();
-        diagram.drawSVG('graph', {
-            'flowstate' : {
-                'connection' : {'font-color': 'white'},
-                'approved' : {'fill':'Chartreuse', 'yes-text': 'T', 'no-text': 'F'}
+        graph.drawSVG('graph', {
+            'flowstate': {
+                'connection': {'font-color': 'white'},
+                'inPath': {'fill': 'Chartreuse', 'yes-text': 'T', 'no-text': 'F'},
+                'ifAndFalse': {'yes-text': 'T', 'no-text': 'F'}
             }
         });
     });
