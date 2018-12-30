@@ -41,7 +41,7 @@ function getFunctionNodesString(parsedCode, parsedArgs) {
     let bindings = generateBindings(getParams(parsedCode.body[0]), getArgsValues(parsedArgs));
     let body = parsedCode.body[0].body.body, nodesString = '', firstCond = true;
     for(let  i = 0; i < body.length; i++){
-        if ((body[i].type === 'IfStatement' || body[i].type === 'WhileStatement') && firstCond){
+        if ((body[i].type === 'IfStatement' || body[i].type === 'WhileStatement') && firstCond && newOP){
             nodesString = `op${opIndex++}=>operation: ${nodesString}|inPath\n`;
             firstCond = false;
         }
@@ -147,10 +147,15 @@ function getAssignmentExpressionNodeString(assignmentExpression, bindings, inPat
     return content;
 }
 
-function getVariableDeclarationNodeString(variableDeclaration, bindings) {
-    for (let i = 0; i< variableDeclaration.declarations.length; i++)
-        bindings[variableDeclaration.declarations[i].id.name] = astToCode(variableDeclaration.declarations[i].init).replace(/;/g,'');
-    return astToCode(variableDeclaration).replace(/let |;/g, '') + '\n';
+function getVariableDeclarationNodeString(variableDeclaration, bindings, inPath) {
+    if(inPath)
+        for (let i = 0; i< variableDeclaration.declarations.length; i++)
+            bindings[variableDeclaration.declarations[i].id.name] = astToCode(variableDeclaration.declarations[i].init).replace(/;/g,'');
+    let content = astToCode(variableDeclaration).replace(/let |;/g, '') + '\n';
+    if(newOP)
+        content = `op${opIndex++}=>operation: ` + content;
+    newOP = false;
+    return content;
 }
 
 function getReturnStatementNodeString(returnStatement){
@@ -210,7 +215,7 @@ function getIfAlternateEdgeString(ifStatement, index) {
 function prevIsCond(ifIndex) {
     for(let i = 0; i < lines.length; i++)
         if(lines[i].includes(`cond${ifIndex}`))
-            for(let j = i-1; j > 0; j--) {
+            for(let j = i - 1; j > 0; j--) {
                 if (lines[j].includes('cond'))
                     return true;
                 else if (lines[j].includes('op'))
@@ -221,8 +226,13 @@ function prevIsCond(ifIndex) {
 
 function nextIsCond(ifIndex) {
     for(let i = 0; i < lines.length; i++)
-        if(lines[i].includes(`cond${ifIndex}`) && i + 3 < lines.length && lines[i + 3].includes('cond'))
-            return true;
+        if(lines[i].includes(`cond${ifIndex}`))
+            for(let j = i+1; j < lines.length; j++) {
+                if (lines[j].includes('cond'))
+                    return true;
+                else if (lines[j].includes('op'))
+                    return false;
+            }
     return false;
 }
 

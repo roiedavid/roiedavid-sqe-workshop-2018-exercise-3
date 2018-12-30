@@ -15,9 +15,7 @@ $(document).ready(function () {
         graph.drawSVG('graph', {
             'flowstate': {
                 'inConnection': {'fill': 'Chartreuse', 'font-color': 'Chartreuse'},
-                'outConnection': {'font-color': 'white'},
                 'inPath': {'fill': 'Chartreuse', 'yes-text': 'T', 'no-text': 'F'},
-                'outPath': {'yes-text': 'T', 'no-text': 'F'}
             }
         });
     });
