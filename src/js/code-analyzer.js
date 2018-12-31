@@ -41,11 +41,17 @@ function getFunctionNodesString(parsedCode, parsedArgs) {
     let bindings = generateBindings(getParams(parsedCode.body[0]), getArgsValues(parsedArgs));
     let body = parsedCode.body[0].body.body, nodesString = '', firstCond = true;
     for(let  i = 0; i < body.length; i++){
-        if ((body[i].type === 'IfStatement' || body[i].type === 'WhileStatement') && firstCond && newOP){
-            nodesString = `op${opIndex++}=>operation: ${nodesString}|inPath\n`;
-            firstCond = false;
+        if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement'){
+            if(firstCond){
+                // nodesString = op<op index>=>operation: <code from start of function until first if/while>
+                nodesString = `op${opIndex++}=>operation: ${nodesString}|inPath\n`;
+                firstCond = false;
+            }
+            else if(body[i].type === 'IfStatement')
+                // without op<op index>=>operation: because the first assignmentExp/variableDecl will put it at the beginning
+                nodesString = `${nodesString}|inPath\n`;
         }
-        nodesString += getNodeString(body[i], bindings, true);
+        nodesString += getNodeString(body[i], bindings, true); // every element on body is inPath
     }
     lines = nodesString.split('\n');
     return nodesString;
@@ -58,19 +64,72 @@ const getStringHandlersMap = {'IfStatement': getIfStatementNodeString, 'WhileSta
 
 function getNodeString(node, bindings, inPath) {
     let func = getStringHandlersMap[node.type];
-    return func ? func(node, bindings, inPath) : '';
+    return func(node, bindings, inPath);
 }
 
-function getIfStatementNodeString(ifStatement, bindings, inPath) {
+function getBlockContent(node) {
+    if(node.type === 'BlockStatement'){
+        let content = '';
+        for (let i = 0 ; i < node.body.length; i++)
+            content += astToCode(node.body[i]).replace(/;/g,'') + '\n';
+        return content;
+    }
+    return astToCode(node).replace(/;/g,'') + '\n';
+}
+
+function getIfStatementNodeString(ifStatement, bindings) {
     newOP = true;
-    let nodesString = `cond${condIndex++}=>condition: ${astToCode(ifStatement.test)}\n`;
-    if(inPath)
-        nodesString += '|inPath\n';
+    let nodesString = `cond${condIndex++}=>condition: ${astToCode(ifStatement.test)}|inPath\n`;
     let testRes = evalTest(ifStatement.test, bindings);
     nodesString += `para${paraIndex++}=>parallel: ${getBlockContent(ifStatement.consequent)}${testRes ? '|inPath\n' : ''}`;
-    nodesString += `conn${connIndex++}=>start: empty|${inPath ? 'in' : 'out'}Connection\n`;
+    nodesString += `conn${connIndex++}=>start: empty|inConnection\n`;
     nodesString += ifStatement.alternate ? getNodeString(ifStatement.alternate, deepCopy(bindings), !testRes) : '';
     return nodesString;
+}
+
+function getWhileStatementNodeString(whileStatement, bindings) {
+    newOP = true;
+    let nodesString = `op${opIndex++}=>operation: NULL|inPath\n`;
+    nodesString += `cond${condIndex++}=>condition: ${astToCode(whileStatement.test)}|inPath\n`;
+    let testRes = evalTest(whileStatement.test, bindings);
+    nodesString += `para${paraIndex++}=>parallel: ${getBlockContent(whileStatement.body)}${testRes ? '|inPath\n' : ''}`;
+    return nodesString;
+}
+
+function getBlockStatementNodeString(blockStatement, bindings, inPath) {
+    let nodesString = '';
+    for (let i = 0 ; i < blockStatement.body.length; i++)
+        nodesString += getNodeString(blockStatement.body[i], bindings, inPath);
+    newOP = true;
+    return nodesString;
+}
+
+function getExpressionStatementNodeString(expressionStatement, bindings, inPath) {
+    return getNodeString(expressionStatement.expression, bindings, inPath);
+}
+
+function getAssignmentExpressionNodeString(assignmentExpression, bindings, inPath){
+    if(inPath)
+        bindings[assignmentExpression.left.name] = astToCode(assignmentExpression.right).replace(/;/g,'');
+    let content = astToCode(assignmentExpression).replace(/;/g, '') + '\n';
+    if(newOP)
+        content = `op${opIndex++}=>operation: ` + content;
+    newOP = false;
+    return content;
+}
+
+function getVariableDeclarationNodeString(variableDeclaration, bindings) {
+    for (let i = 0; i< variableDeclaration.declarations.length; i++)
+        bindings[variableDeclaration.declarations[i].id.name] = astToCode(variableDeclaration.declarations[i].init).replace(/;/g,'');
+    let content = astToCode(variableDeclaration).replace(/let |;/g, '') + '\n';
+    if(newOP)
+        content = `op${opIndex++}=>operation: ` + content;
+    newOP = false;
+    return content;
+}
+
+function getReturnStatementNodeString(returnStatement){
+    return `op${opIndex++}=>operation: ${astToCode(returnStatement).replace(/;/g, '')}|inPath\n`;
 }
 
 function evalTest(test, bindings) {
@@ -107,61 +166,6 @@ function getValueAsLiterals(value, bindings) {
     return ast;
 }
 
-function getBlockContent(node) {
-    if(node.type === 'BlockStatement'){
-        let content = '';
-        for (let i = 0 ; i < node.body.length; i++)
-            content += astToCode(node.body[i]).replace(/;/g,'') + '\n';
-        return content;
-    }
-    return astToCode(node).replace(/;/g,'') + '\n';
-}
-
-function getWhileStatementNodeString(whileStatement, bindings, inPath) {
-    newOP = true;
-    let nodesString = `op${opIndex++}=>operation: NULL\n`;
-    nodesString += `cond${condIndex++}=>condition: ${astToCode(whileStatement.test)}\n`;
-    nodesString += `para${paraIndex++}=>parallel: ${getBlockContent(whileStatement.body, bindings, inPath)}`;
-    return nodesString;
-}
-
-function getBlockStatementNodeString(blockStatement, bindings, inPath) {
-    let nodesString = '';
-    for (let i = 0 ; i < blockStatement.body.length; i++)
-        nodesString += getNodeString(blockStatement.body[i], bindings, inPath);
-    newOP = true;
-    return nodesString;
-}
-
-function getExpressionStatementNodeString(expressionStatement, bindings, inPath) {
-    return getNodeString(expressionStatement.expression, bindings, inPath);
-}
-
-function getAssignmentExpressionNodeString(assignmentExpression, bindings, inPath){
-    if(inPath)
-        bindings[assignmentExpression.left.name] = astToCode(assignmentExpression.right).replace(/;/g,'');
-    let content = astToCode(assignmentExpression).replace(/;/g, '') + '\n';
-    if(newOP)
-        content = `op${opIndex++}=>operation: ` + content;
-    newOP = false;
-    return content;
-}
-
-function getVariableDeclarationNodeString(variableDeclaration, bindings, inPath) {
-    if(inPath)
-        for (let i = 0; i< variableDeclaration.declarations.length; i++)
-            bindings[variableDeclaration.declarations[i].id.name] = astToCode(variableDeclaration.declarations[i].init).replace(/;/g,'');
-    let content = astToCode(variableDeclaration).replace(/let |;/g, '') + '\n';
-    if(newOP)
-        content = `op${opIndex++}=>operation: ` + content;
-    newOP = false;
-    return content;
-}
-
-function getReturnStatementNodeString(returnStatement){
-    return `op${opIndex++}=>operation: ${astToCode(returnStatement).replace(/;/g, '')}|inPath\n`;
-}
-
 // Edges Building
 function getFunctionEdgesString(parsedCode) {
     initGlobalIndexes();
@@ -191,8 +195,9 @@ function getIfStatementEdgeString(ifStatement, skip) {
 function getIfAlternateEdgeString(ifStatement, index) {
     let edgesString = '';
     if(ifStatement.alternate){ // there is else
-        if(ifStatement.alternate.type === 'IfStatement') // it's else-if
+        if(ifStatement.alternate.type === 'IfStatement') { // it's else-if
             edgesString += `cond${index}(no)->cond${index + 1}\n`;
+        }
         else { // regular else (not else-if)
             edgesString += `cond${index}(no)->op${opIndex}\n`;
             edgesString += `op${opIndex}->conn${connIndex}\n`;
@@ -212,43 +217,47 @@ function getIfAlternateEdgeString(ifStatement, index) {
     return edgesString;
 }
 
-function prevIsCond(ifIndex) {
+function getWhileStatementEdgeString() {
+    let index = condIndex++; // save while cond index
+    let index2 = opIndex;
+    if(!prevIsCond(index, true))
+        opIndex++;
+    return `op${index2}->op${opIndex}\n` +
+        `op${opIndex}->cond${index}\n` +
+        `cond${index}(yes,right)->para${index}\n` +
+        `para${index}(path3)->op${opIndex}\n` +
+        `cond${index}(no)->op${opIndex + 1}\n`;
+}
+
+function prevIsCond(index, isWhile) {
+    let sawNULLOp = false;
     for(let i = 0; i < lines.length; i++)
-        if(lines[i].includes(`cond${ifIndex}`))
+        if(lines[i].includes(`cond${index}`))
             for(let j = i - 1; j > 0; j--) {
                 if (lines[j].includes('cond'))
                     return true;
-                else if (lines[j].includes('op'))
-                    return false;
+                else if (lines[j].includes('op')){
+                    if (isWhile)
+                        sawNULLOp = true;
+                }
             }
     return false;
 }
 
-function nextIsCond(ifIndex) {
+function nextIsCond(index) {
     for(let i = 0; i < lines.length; i++)
-        if(lines[i].includes(`cond${ifIndex}`))
+        if(lines[i].includes(`cond${index}`))
             for(let j = i+1; j < lines.length; j++) {
                 if (lines[j].includes('cond'))
                     return true;
                 else if (lines[j].includes('op'))
                     return false;
             }
-    return false;
-}
-
-function getWhileStatementEdgeString() {
-    let index = condIndex++;
-    let edgesString = `op${opIndex++}->op${opIndex}\n` +
-        `op${opIndex}->cond${index}\n` +
-        `cond${index}(yes,right)->para${index}\n` +
-        `para${index}(path3)->op${opIndex}\n` +
-        `cond${index}(no)->op${opIndex + 1}`;
-    return edgesString;
 }
 
 function initGlobalIndexes() {
     opIndex = condIndex = paraIndex = connIndex = 1;
-    newOP = true;
+    newOP = false;
 }
 
 function deepCopy(element) {
