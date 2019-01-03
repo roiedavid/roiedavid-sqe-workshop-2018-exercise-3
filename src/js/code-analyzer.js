@@ -41,13 +41,13 @@ function getFunctionNodesString(parsedCode, parsedArgs) {
     let bindings = generateBindings(getParams(parsedCode.body[0]), getArgsValues(parsedArgs));
     let body = parsedCode.body[0].body.body, nodesString = '', firstCond = true;
     for(let  i = 0; i < body.length; i++){
-        if (body[i].type === 'IfStatement' || body[i].type === 'WhileStatement'){
+        if (isWhileOrIf(body[i])){
             if(firstCond){
                 // nodesString = op<op index>=>operation: <code from start of function until first if/while>
                 nodesString = `op${opIndex++}=>operation: ${nodesString}|inPath\n`;
                 firstCond = false;
             }
-            else if(body[i].type === 'IfStatement')
+            else
                 // without op<op index>=>operation: because the first assignmentExp/variableDecl will put it at the beginning
                 nodesString = `${nodesString}|inPath\n`;
         }
@@ -55,6 +55,11 @@ function getFunctionNodesString(parsedCode, parsedArgs) {
     }
     lines = nodesString.split('\n');
     return nodesString;
+}
+
+function isWhileOrIf(node) {
+    return node.type === 'IfStatement' || node.type === 'WhileStatement';
+
 }
 
 const getStringHandlersMap = {'IfStatement': getIfStatementNodeString, 'WhileStatement': getWhileStatementNodeString,
@@ -195,17 +200,10 @@ function getIfStatementEdgeString(ifStatement, skip) {
 function getIfAlternateEdgeString(ifStatement, index) {
     let edgesString = '';
     if(ifStatement.alternate){ // there is else
-        if(ifStatement.alternate.type === 'IfStatement') { // it's else-if
+        if(ifStatement.alternate.type === 'IfStatement')  // it's else-if
             edgesString += `cond${index}(no)->cond${index + 1}\n`;
-        }
-        else { // regular else (not else-if)
-            edgesString += `cond${index}(no)->op${opIndex}\n`;
-            edgesString += `op${opIndex}->conn${connIndex}\n`;
-            if(nextIsCond(index))
-                edgesString += `conn${connIndex}->cond${index + 1}\n`;
-            else
-                edgesString += `conn${connIndex}->op${opIndex + 1}\n`;
-        }
+        else   // regular else (not else-if)
+            edgesString += handleRegularElse(index);
     }
     else { // there is no else
         edgesString += `cond${index}(no)->conn${connIndex}\n`;
@@ -214,6 +212,13 @@ function getIfAlternateEdgeString(ifStatement, index) {
         else
             edgesString += `conn${connIndex}->op${opIndex}\n`;
     }
+    return edgesString;
+}
+
+function handleRegularElse(index) {
+    let edgesString = `cond${index}(no)->op${opIndex}\n`;
+    edgesString += `op${opIndex}->conn${connIndex}\n`;
+    edgesString += `conn${connIndex}->op${opIndex + 1}\n`;
     return edgesString;
 }
 
@@ -232,27 +237,39 @@ function getWhileStatementEdgeString() {
 function prevIsCond(index, isWhile) {
     let sawNULLOp = false;
     for(let i = 0; i < lines.length; i++)
-        if(lines[i].includes(`cond${index}`))
-            for(let j = i - 1; j > 0; j--) {
-                if (lines[j].includes('cond'))
-                    return true;
-                else if (lines[j].includes('op')){
-                    if (isWhile)
-                        sawNULLOp = true;
-                }
-            }
+        if(lines[i].includes(`cond${index}`)){
+            if(prevIsCondHelper(i, isWhile, sawNULLOp))
+                return prevIsCondHelper(i, isWhile, sawNULLOp);
+            sawNULLOp = true;
+        }
     return false;
 }
+
+function prevIsCondHelper(i, isWhile, sawNULLOp) {
+    for(let j = i - 1; j > 0; j--)
+        if (checkCond(j, isWhile , sawNULLOp))
+            return true;
+}
+
+function checkCond(j, isWhile , sawNULLOp) {
+    return lines[j].includes('cond') || (lines[j].includes('op') && isWhile && sawNULLOp);
+}
+
 
 function nextIsCond(index) {
     for(let i = 0; i < lines.length; i++)
         if(lines[i].includes(`cond${index}`))
-            for(let j = i+1; j < lines.length; j++) {
-                if (lines[j].includes('cond'))
-                    return true;
-                else if (lines[j].includes('op'))
-                    return false;
-            }
+            return nextIsCondHelper(i, lines);
+}
+
+function nextIsCondHelper(i, lines) {
+    for(let j = i + 1; j < lines.length; j++) {
+        if (lines[j].includes('cond'))
+            return true;
+        if (lines[j].includes('op'))
+            return false;
+    }
+
 }
 
 function initGlobalIndexes() {

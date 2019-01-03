@@ -460,25 +460,6 @@ describe('The javascript parser', () => {
         assert(getFunctionNodesString(parsedCode, parsedArgs) === expected);
     });
 
-    it('else edge', () => {
-        let parsedCode = parseCode('function foo(x){\n' +
-            '    if (1 < x) {\n' +
-            '        x = 7;\n' +
-            '    }\n' +
-            '    else {\n' +
-            '        x = 9;\n' +
-            '    }\n' +
-            '    return x;\n' +
-            '}');
-        let expected = 'op1->cond1\n' +
-            'cond1(yes,right)->para1\n' +
-            'para1(path1)->conn1\n' +
-            'cond1(no)->op2\n' +
-            'op2->conn1\n' +
-            'conn1->op3\n';
-        assert(getFunctionEdgesString(parsedCode) === expected);
-    });
-
     it('while if node', () => {
         let parsedCode = parseCode('function foo(x){\n' +
             'let c = 8;     \n' +
@@ -502,6 +483,35 @@ describe('The javascript parser', () => {
             'conn1=>start: empty|inConnection\n' +
             'op3=>operation: return x|inPath\n';
         assert(getFunctionNodesString(parsedCode, parsedArgs) === expected);
+    });
+
+
+    it(' big if egde', () => {
+        let parsedCode = parseCode('function foo(x, y, z){\n' +
+            '    let a = x + 1;\n' +
+            '    let b = a + y;\n' +
+            '    let c = 0;\n' +
+            '    \n' +
+            '    if (b < z) {\n' +
+            '        c = c + 5;\n' +
+            '    } else if (b < z * 2) {\n' +
+            '        c = c + x + 5;\n' +
+            '    } else {\n' +
+            '        c = c + z + 5;\n' +
+            '    }\n' +
+            '    \n' +
+            '    return c;\n' +
+            '}');
+        let expected = 'op1->cond1\n' +
+            'cond1(yes,right)->para1\n' +
+            'para1(path1)->conn1\n' +
+            'cond1(no)->cond2\n' +
+            'cond2(yes,right)->para2\n' +
+            'para2(path1)->conn1\n' +
+            'cond2(no)->op2\n' +
+            'op2->conn1\n' +
+            'conn1->op3\n';
+        assert(getFunctionEdgesString(parsedCode) === expected);
     });
 
 });

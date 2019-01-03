@@ -9,7 +9,6 @@ $(document).ready(function () {
         $('#parsedCode').val(JSON.stringify(parsedCode, null, 2));
         let nodesString = getFunctionNodesString(parsedCode, parsedArgs);
         let edgesString = getFunctionEdgesString(parsedCode);
-        console.log(nodesString + '\n' + edgesString);
         let graph = flowchart.parse(nodesString + '\n' + edgesString);
         clearGraph();
         graph.drawSVG('graph', {
